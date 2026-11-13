@@ -89,7 +89,7 @@ fun SettingsScreen(onHome: () -> Unit) {
         item {
             SettingRow(
                 title = "Auto-update rates",
-                subtitle = "Refresh exchange rates when they are older than a day"
+                subtitle = "Refresh exchange rates when they are older than 12 hours"
             ) {
                 Switch(checked = autoCurrency, onCheckedChange = viewModel::setAutoCurrency)
             }
@@ -107,8 +107,8 @@ fun SettingsScreen(onHome: () -> Unit) {
         item {
             Text(
                 "AllCalc 1.0.0 — offline-first calculator, scan-and-solve and unit converter. " +
-                    "Live currency rates come from the free open.er-api.com service; sample rates " +
-                    "are used offline and are clearly marked until you update.",
+                    "Live currency rates come from free exchange-rate feeds (open.er-api.com and " +
+                    "fallbacks); sample rates are used offline and are clearly marked until you update.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

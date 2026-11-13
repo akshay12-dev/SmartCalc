@@ -184,7 +184,7 @@ fun KeyButton(
 }
 
 @Composable
-fun SciKey(label: String, onClick: () -> Unit) {
+fun SciKey(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
     Surface(
@@ -193,7 +193,7 @@ fun SciKey(label: String, onClick: () -> Unit) {
             runCatching { view.playSoundEffect(SoundEffectConstants.CLICK) }
             onClick()
         },
-        modifier = Modifier.height(40.dp),
+        modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -202,7 +202,7 @@ fun SciKey(label: String, onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
             modifier = Modifier.padding(horizontal = 14.dp)
         ) {
-            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
     }
 }

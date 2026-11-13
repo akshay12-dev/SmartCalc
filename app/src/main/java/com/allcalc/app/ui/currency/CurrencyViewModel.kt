@@ -1,6 +1,5 @@
 package com.allcalc.app.ui.currency
 
-import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.allcalc.app.data.currency.CurrencyRepository
@@ -9,6 +8,7 @@ import com.allcalc.app.data.local.HistoryRepository
 import com.allcalc.app.data.local.HistoryTypes
 import com.allcalc.app.data.preferences.CurrencyCache
 import com.allcalc.app.data.preferences.PreferencesRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -27,7 +28,8 @@ data class CurrencyUiState(
     val result: String? = null,
     val errorMessage: String? = null,
     val refreshing: Boolean = false,
-    val savedNotice: Boolean = false
+    val savedNotice: Boolean = false,
+    val ratesUpdatedNotice: Boolean = false
 )
 
 class CurrencyViewModel(
@@ -48,8 +50,9 @@ class CurrencyViewModel(
             recompute()
 
             val auto = prefs.autoCurrency.first()
-            val stale = initial.updatedAt == 0L ||
-                System.currentTimeMillis() - initial.updatedAt > 24L * 60 * 60 * 1000
+            val age = System.currentTimeMillis() - initial.updatedAt
+            val stale = initial.updatedAt == 0L || initial.isSample ||
+                age > 12L * 60 * 60 * 1000
             if (auto && stale) refresh()
         }
         viewModelScope.launch {
@@ -60,15 +63,9 @@ class CurrencyViewModel(
                 }
             }
         }
+        // Auto-save: use StateFlow debounce (works correctly outside Compose composition)
         viewModelScope.launch {
-            snapshotFlow {
-                listOf(
-                    _state.value.from,
-                    _state.value.to,
-                    _state.value.amount,
-                    _state.value.result
-                )
-            }
+            _state
                 .debounce(1500)
                 .collect { saveIfPossible() }
         }
@@ -96,12 +93,29 @@ class CurrencyViewModel(
 
     fun refresh() {
         if (_state.value.refreshing) return
-        _state.update { it.copy(refreshing = true, errorMessage = null) }
+        _state.update { it.copy(refreshing = true, errorMessage = null, ratesUpdatedNotice = false) }
         viewModelScope.launch {
-            when (val result = repository.refresh()) {
+            // Must run on IO dispatcher — network calls on Main thread throw NetworkOnMainThreadException
+            val result = try {
+                withContext(Dispatchers.IO) { repository.refresh() }
+            } catch (e: Exception) {
+                CurrencyRepository.FetchResult.Failure(
+                    e.message ?: "Unable to reach the rates service"
+                )
+            }
+            when (result) {
                 is CurrencyRepository.FetchResult.Success -> {
-                    _state.update { it.copy(cache = result.cache, refreshing = false) }
+                    _state.update {
+                        it.copy(
+                            cache = result.cache,
+                            refreshing = false,
+                            errorMessage = null,
+                            ratesUpdatedNotice = true
+                        )
+                    }
                     recompute()
+                    kotlinx.coroutines.delay(2500)
+                    _state.update { it.copy(ratesUpdatedNotice = false) }
                 }
                 is CurrencyRepository.FetchResult.Failure -> {
                     _state.update { it.copy(refreshing = false, errorMessage = result.message) }

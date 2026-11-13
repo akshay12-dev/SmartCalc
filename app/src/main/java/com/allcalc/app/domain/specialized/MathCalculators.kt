@@ -2,9 +2,13 @@ package com.allcalc.app.domain.specialized
 
 import java.math.BigDecimal
 import java.math.BigInteger
-import java.math.MathContext
 import java.math.RoundingMode
-import kotlin.math.*
+import kotlin.math.abs
+import kotlin.math.ln
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.roundToLong
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 // Result model for all specialized calculations

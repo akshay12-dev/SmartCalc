@@ -152,9 +152,18 @@ fun CurrencyScreen(
                 }
             }
 
-            state.errorMessage?.let {
-                item { NoticeBanner(it, isError = true) }
-                item { TextButton(onClick = viewModel::clearError) { Text("Dismiss") } }
+            state.errorMessage?.let { message ->
+                item { NoticeBanner(message, isError = true) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = viewModel::refresh) { Text("Retry") }
+                        TextButton(onClick = viewModel::clearError) { Text("Dismiss") }
+                    }
+                }
+            }
+
+            if (state.ratesUpdatedNotice) {
+                item { NoticeBanner("Live rates updated ✓", isError = false) }
             }
 
             if (state.savedNotice) {
