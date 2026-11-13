@@ -28,6 +28,11 @@ sealed class Node {
 
 class ExpressionEngine(private val defaultPrecision: Int = 12) {
 
+    private companion object {
+        val HUNDRED: BigDecimal = BigDecimal.valueOf(100)
+        const val TRIG_EPSILON = 1e-12
+    }
+
     private enum class K { NUM, OP, LP, RP, POST, FUNC, CONST, VAR, BAR, END }
 
     private data class Tok(val kind: K, val value: String, val pos: Int) {
@@ -175,7 +180,7 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
                 if (t.kind == K.END || (t.kind == K.OP && t.value == "=")) break
                 if (t.kind == K.OP && (t.value == "+" || t.value == "-")) {
                     next()
-                    node = Node.Bin(t.value, node, parseTerm())
+                    node = additiveNode(t.value, node, parseTerm())
                 } else break
             }
             return node
@@ -187,11 +192,22 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
                 val t = peek()
                 if (t.kind == K.OP && (t.value == "+" || t.value == "-")) {
                     next()
-                    node = Node.Bin(t.value, node, parseTerm())
+                    node = additiveNode(t.value, node, parseTerm())
                 } else break
             }
             return node
         }
+
+        /**
+         * Calculator-style percent: "200 + 10%" means "200 plus 10% of 200" (= 220), while a
+         * bare "10%" is still 0.1 and "200 × 10%" is still 20.
+         */
+        private fun additiveNode(op: String, left: Node, right: Node): Node =
+            if (right is Node.Post && right.op == "%") {
+                Node.Bin(if (op == "+") "pct+" else "pct-", left, right.operand)
+            } else {
+                Node.Bin(op, left, right)
+            }
 
         private fun parseTerm(): Node {
             var node = parseUnary()
@@ -201,14 +217,6 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
                     t.kind == K.OP && (t.value == "*" || t.value == "/") -> {
                         next()
                         node = Node.Bin(t.value, node, parseUnary())
-                    }
-                    t.kind == K.OP && t.value == "%" -> {
-                        next()
-                        node = if (operandStart(peek())) {
-                            Node.Bin("pct", node, parseUnary())
-                        } else {
-                            Node.Post("%", node)
-                        }
                     }
                     operandStart(t) -> node = Node.Bin("*", node, parseUnary())
                     else -> return node
@@ -243,10 +251,17 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
             var node = parsePrimary()
             while (true) {
                 val t = peek()
-                if (t.kind == K.POST && t.value == "!") {
-                    next()
-                    node = Node.Post("!", node)
-                } else return node
+                when {
+                    t.kind == K.POST && t.value == "!" -> {
+                        next()
+                        node = Node.Post("!", node)
+                    }
+                    t.kind == K.OP && t.value == "%" -> {
+                        next()
+                        node = Node.Post("%", node)
+                    }
+                    else -> return node
+                }
             }
         }
 
@@ -338,7 +353,8 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
         "+" -> a.add(b, mc)
         "-" -> a.subtract(b, mc)
         "*" -> a.multiply(b, mc)
-        "pct" -> a.multiply(b, mc).divide(BigDecimal.valueOf(100), mc)
+        "pct+" -> a.add(a.multiply(b, mc).divide(HUNDRED, mc), mc)
+        "pct-" -> a.subtract(a.multiply(b, mc).divide(HUNDRED, mc), mc)
         "/" -> {
             if (b.compareTo(BigDecimal.ZERO) == 0) throw EvaluationException("Cannot divide by zero")
             a.divide(b, mc)
@@ -393,13 +409,27 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
     private fun function(name: String, x: BigDecimal, angleDeg: Boolean, mc: MathContext): BigDecimal {
         fun toRadians(v: Double) = if (angleDeg) v * Math.PI / 180.0 else v
         fun fromRadians(v: Double) = if (angleDeg) v * 180.0 / Math.PI else v
+        // Values like sin(180°) come out as 1.2E-16 in floating point; show a clean 0 instead.
+        fun cleanTrig(v: Double) = if (v.isFinite() && abs(v) < TRIG_EPSILON) 0.0 else v
         val d = x.toDouble()
+        val rad = toRadians(d)
         val v: Double = when (name) {
-            "sin" -> Math.sin(toRadians(d))
-            "cos" -> Math.cos(toRadians(d))
-            "tan" -> Math.tan(toRadians(d))
-            "asin" -> fromRadians(Math.asin(d))
-            "acos" -> fromRadians(Math.acos(d))
+            "sin" -> cleanTrig(Math.sin(rad))
+            "cos" -> cleanTrig(Math.cos(rad))
+            "tan" -> {
+                if (abs(Math.cos(rad)) < TRIG_EPSILON) {
+                    throw EvaluationException("tan is undefined for this angle (cosine is 0)")
+                }
+                Math.tan(rad)
+            }
+            "asin" -> {
+                if (abs(d) > 1.0) throw EvaluationException("asin is only defined for values between −1 and 1")
+                fromRadians(Math.asin(d))
+            }
+            "acos" -> {
+                if (abs(d) > 1.0) throw EvaluationException("acos is only defined for values between −1 and 1")
+                fromRadians(Math.acos(d))
+            }
             "atan" -> fromRadians(Math.atan(d))
             "ln" -> {
                 if (x.signum() <= 0) throw EvaluationException("ln is undefined for numbers that are 0 or negative")
@@ -521,7 +551,7 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
             }
             is Node.Post -> {
                 val x = rec(node.operand)
-                val r = if (node.op == "%") x.divide(BigDecimal.valueOf(100), mc) else factorial(x)
+                val r = if (node.op == "%") x.divide(HUNDRED, mc) else factorial(x)
                 out += "${expr(node.operand)}${node.op} = ${formatSmart(r, mc.precision)}"
                 r
             }
@@ -537,10 +567,16 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
                 val opDisplay = when (node.op) {
                     "*" -> "×"
                     "/" -> "÷"
-                    "pct" -> "% of"
+                    "pct+" -> "+"
+                    "pct-" -> "-"
                     else -> node.op
                 }
-                out += "${expr(node.left)} $opDisplay ${expr(node.right)} = ${formatSmart(res, mc.precision)}"
+                val rightText = if (node.op == "pct+" || node.op == "pct-") {
+                    "${expr(node.right)}%"
+                } else {
+                    expr(node.right)
+                }
+                out += "${expr(node.left)} $opDisplay $rightText = ${formatSmart(res, mc.precision)}"
                 res
             }
             is Node.Pow -> {
@@ -575,10 +611,16 @@ class ExpressionEngine(private val defaultPrecision: Int = 12) {
             val op = when (node.op) {
                 "*" -> " × "
                 "/" -> " ÷ "
-                "pct" -> " % of "
+                "pct+" -> " + "
+                "pct-" -> " - "
                 else -> " ${node.op} "
             }
-            "(${expr(node.left)}$op${expr(node.right)})"
+            val rightText = if (node.op == "pct+" || node.op == "pct-") {
+                "${expr(node.right)}%"
+            } else {
+                expr(node.right)
+            }
+            "(${expr(node.left)}$op$rightText)"
         }
         is Node.Eq -> "${expr(node.lhs)} = ${expr(node.rhs)}"
     }

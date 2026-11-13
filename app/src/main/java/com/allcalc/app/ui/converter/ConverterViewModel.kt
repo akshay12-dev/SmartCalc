@@ -42,10 +42,16 @@ class ConverterViewModel(
     private var precision = 4
     private var lastSavedKey: String? = null
 
+    private companion object {
+        /** Decimal places used when the precision setting is "auto" (0). */
+        const val AUTO_PRECISION = 6
+    }
+
     init {
         viewModelScope.launch {
             prefs.decimalPrecision.collect {
-                precision = it.coerceIn(0, 10)
+                // 0 means "auto" everywhere else in the app, so keep a sensible default here too.
+                precision = if (it <= 0) AUTO_PRECISION else it.coerceIn(1, 10)
                 recompute()
             }
         }

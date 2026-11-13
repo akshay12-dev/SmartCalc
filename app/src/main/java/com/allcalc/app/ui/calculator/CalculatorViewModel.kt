@@ -166,6 +166,10 @@ class CalculatorViewModel(
     }
 
     fun insertOperator(op: String) {
+        if (op == "%") {
+            insertPercent()
+            return
+        }
         val st = _state.value
         if (clearOnNext) {
             clearOnNext = false
@@ -199,6 +203,36 @@ class CalculatorViewModel(
             it.copy(
                 expression = newBefore + after,
                 cursor = newBefore.length,
+                lastExpression = null,
+                result = null,
+                selection = null,
+                errorMessage = null
+            )
+        }
+        recompute()
+    }
+
+    /**
+     * % is a postfix operator. It is only appended after a value, so key presses that would
+     * produce an unparseable expression (e.g. "+%") are ignored.
+     */
+    private fun insertPercent() {
+        val st = _state.value
+        var expr = st.expression
+        var cursor = st.cursor.coerceIn(0, expr.length)
+        selectionRange(st)?.let { (start, end) ->
+            expr = expr.substring(0, start) + expr.substring(end)
+            cursor = start
+        }
+        val before = expr.substring(0, cursor)
+        val last = before.lastOrNull() ?: return
+        if (last in "+-×÷*/^(=%") return
+        clearOnNext = false
+        val newExpr = before + "%" + expr.substring(cursor)
+        _state.update {
+            it.copy(
+                expression = newExpr,
+                cursor = cursor + 1,
                 lastExpression = null,
                 result = null,
                 selection = null,

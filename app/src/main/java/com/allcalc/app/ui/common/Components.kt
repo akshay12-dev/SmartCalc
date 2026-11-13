@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import android.view.SoundEffectConstants
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.staticCompositionLocalOf
 
 enum class KeyStyle {
     DIGIT,
@@ -51,6 +52,14 @@ enum class KeyStyle {
     ACTION,
     EQUALS
 }
+
+/** Haptic/key-sound preferences, provided once at the app root and read by every key. */
+data class FeedbackSettings(
+    val haptics: Boolean = true,
+    val sound: Boolean = false
+)
+
+val LocalFeedbackSettings = staticCompositionLocalOf { FeedbackSettings() }
 
 @Composable
 fun ScreenHeader(
@@ -143,7 +152,13 @@ fun KeyButton(
 ) {
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val feedback = LocalFeedbackSettings.current
     val effectiveStyle = keyStyle ?: if (accent) KeyStyle.EQUALS else KeyStyle.DIGIT
+
+    fun keyFeedback(type: HapticFeedbackType) {
+        if (feedback.haptics) haptic.performHapticFeedback(type)
+        if (feedback.sound) runCatching { view.playSoundEffect(SoundEffectConstants.CLICK) }
+    }
 
     val (bgColor, textColor) = when (effectiveStyle) {
         KeyStyle.EQUALS -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
@@ -155,14 +170,12 @@ fun KeyButton(
     Surface(
         modifier = modifier.combinedClickable(
             onClick = {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                runCatching { view.playSoundEffect(SoundEffectConstants.CLICK) }
+                keyFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             },
             onLongClick = if (onLongClick != null) {
                 {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    runCatching { view.playSoundEffect(SoundEffectConstants.CLICK) }
+                    keyFeedback(HapticFeedbackType.LongPress)
                     onLongClick()
                 }
             } else null
@@ -187,10 +200,11 @@ fun KeyButton(
 fun SciKey(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val feedback = LocalFeedbackSettings.current
     Surface(
         onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            runCatching { view.playSoundEffect(SoundEffectConstants.CLICK) }
+            if (feedback.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (feedback.sound) runCatching { view.playSoundEffect(SoundEffectConstants.CLICK) }
             onClick()
         },
         modifier = modifier.height(40.dp),

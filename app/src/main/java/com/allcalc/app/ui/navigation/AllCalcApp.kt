@@ -16,12 +16,15 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -31,14 +34,18 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.allcalc.app.ui.calculator.CalculatorScreen
+import com.allcalc.app.ui.common.FeedbackSettings
+import com.allcalc.app.ui.common.LocalFeedbackSettings
 import com.allcalc.app.ui.converter.ConverterScreen
 import com.allcalc.app.ui.currency.CurrencyScreen
 import com.allcalc.app.ui.history.HistoryScreen
 import com.allcalc.app.ui.home.HomeScreen
 import com.allcalc.app.ui.scanner.ScanScreen
 import com.allcalc.app.ui.settings.SettingsScreen
+import com.allcalc.app.ui.settings.SettingsViewModel
 import com.allcalc.app.ui.specialized.SpecializedHubScreen
 import com.allcalc.app.ui.specialized.SpecializedRunnerScreen
+import com.allcalc.app.utils.AppViewModelProvider
 
 object Routes {
     const val HOME = "home"
@@ -88,6 +95,13 @@ fun AllCalcApp() {
         }
     }
 
+    val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider)
+    val hapticsEnabled by settingsViewModel.haptics.collectAsStateWithLifecycle()
+    val soundEnabled by settingsViewModel.sound.collectAsStateWithLifecycle()
+
+    CompositionLocalProvider(
+        LocalFeedbackSettings provides FeedbackSettings(haptics = hapticsEnabled, sound = soundEnabled)
+    ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -214,5 +228,6 @@ fun AllCalcApp() {
                 }
             }
         }
+    }
     }
 }

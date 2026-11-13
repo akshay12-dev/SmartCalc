@@ -69,6 +69,33 @@ class ExpressionEngineTest {
     }
 
     @Test
+    fun `applies calculator style percent in additions and subtractions`() {
+        assertValue("200+10%", 220.0)
+        assertValue("200-10%", 180.0)
+        assertValue("500+10%", 550.0)
+        assertValue("100+15%", 115.0)
+        assertValue("200×10%", 20.0)
+        assertValue("200÷10%", 2000.0)
+        assertValue("(200+10%)×2", 440.0)
+        assertValue("5%+3", 3.05)
+        assertValue("10%^2", 0.01)
+        assertValue("50%(200)", 100.0)
+    }
+
+    @Test
+    fun `trig results are cleaned up at exact angles`() {
+        assertValue("sin(180)", 0.0, 1e-12)
+        assertValue("cos(90)", 0.0, 1e-12)
+        assertValue("sin(30)", 0.5)
+        try {
+            engine.evaluate("tan(90)")
+            fail("Expected EvaluationException for tan(90)")
+        } catch (e: EvaluationException) {
+            // expected
+        }
+    }
+
+    @Test
     fun `evaluates implicit multiplication and factorial`() {
         assertValue("2(3+4)", 14.0)
         assertValue("2π", 6.283185307179586, 1e-6)

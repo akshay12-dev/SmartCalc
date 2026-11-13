@@ -21,7 +21,7 @@ A native Android app that bundles a **scientific calculator**, a **scan-and-solv
 
   `%  √  x²  ±  1/x  ^  !  |  π  e  ln  log  sin  cos  tan  asin  acos  atan  abs`
 
-  - `%` — postfix percent (`50% = 0.5`; `25% of 800 = 200`)
+  - `%` — percent (`50% = 0.5`; `25% of 800 = 200`; calculator-style `200 + 10% = 220`, `200 − 10% = 180`, `200 × 10% = 20`)
   - `√` — square root (`√9 = 3`, `√(9+16) = 5`)
   - `x²` — squares the number at the caret
   - `±` — flips the sign of the number at the caret
